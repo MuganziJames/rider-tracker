@@ -1,0 +1,152 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { CONFIG } from '../constants/config';
+
+export const useWebSocket = (url) => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastMessage, setLastMessage] = useState(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  
+  const ws = useRef(null);
+  const reconnectTimeout = useRef(null);
+
+  // Connect to WebSocket
+  const connect = useCallback(() => {
+    try {
+      if (!url) {
+        setError('WebSocket URL not provided');
+        return;
+      }
+
+      // Close existing connection
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.close();
+      }
+
+      console.log('Connecting to WebSocket:', url);
+      ws.current = new WebSocket(url);
+
+      ws.current.onopen = () => {
+        console.log('WebSocket connected successfully');
+        setIsConnected(true);
+        setError(null);
+        setReconnectAttempts(0);
+        
+        // Send initial connection message
+        sendMessage({
+          type: 'rider_connected',
+          timestamp: new Date().toISOString(),
+          message: 'Rider mobile app connected'
+        });
+      };
+
+      ws.current.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('WebSocket message received:', message);
+          setLastMessage(message);
+        } catch (err) {
+          console.log('WebSocket raw message:', event.data);
+          setLastMessage({ raw: event.data });
+        }
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError('WebSocket connection error');
+      };
+
+      ws.current.onclose = (event) => {
+        console.log('WebSocket connection closed:', event.code, event.reason);
+        setIsConnected(false);
+        
+        // Attempt to reconnect if not intentionally closed
+        if (event.code !== 1000 && reconnectAttempts < CONFIG.MAX_RECONNECT_ATTEMPTS) {
+          scheduleReconnect();
+        }
+      };
+
+    } catch (err) {
+      console.error('WebSocket connection failed:', err);
+      setError('Failed to connect to WebSocket');
+    }
+  }, [url, reconnectAttempts]);
+
+  // Schedule reconnection
+  const scheduleReconnect = useCallback(() => {
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+    }
+
+    const delay = CONFIG.WEBSOCKET_RECONNECT_INTERVAL * Math.pow(2, reconnectAttempts);
+    console.log(`Scheduling WebSocket reconnect in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+    
+    reconnectTimeout.current = setTimeout(() => {
+      setReconnectAttempts(prev => prev + 1);
+      connect();
+    }, delay);
+  }, [connect, reconnectAttempts]);
+
+  // Send message through WebSocket
+  const sendMessage = useCallback((message) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      try {
+        const messageString = typeof message === 'string' ? message : JSON.stringify(message);
+        ws.current.send(messageString);
+        console.log('WebSocket message sent:', message);
+        return true;
+      } catch (err) {
+        console.error('Failed to send WebSocket message:', err);
+        setError('Failed to send message');
+        return false;
+      }
+    } else {
+      console.warn('WebSocket not connected, message not sent:', message);
+      return false;
+    }
+  }, []);
+
+  // Send location update
+  const sendLocationUpdate = useCallback((location) => {
+    if (!location) return false;
+
+    const locationMessage = {
+      type: 'location_update',
+      timestamp: new Date().toISOString(),
+      rider_id: 'rider_001', // This should come from auth/user context
+      location: {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+        speed: location.coords.speed,
+        heading: location.coords.heading,
+      }
+    };
+
+    return sendMessage(locationMessage);
+  }, [sendMessage]);
+
+  // Initialize connection
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+      }
+      if (ws.current) {
+        ws.current.close(1000, 'Component unmounting');
+      }
+    };
+  }, [connect]);
+
+  return {
+    isConnected,
+    error,
+    lastMessage,
+    reconnectAttempts,
+    sendMessage,
+    sendLocationUpdate,
+    reconnect: connect,
+  };
+};
