@@ -115,16 +115,19 @@ rider-tracker/
 ## 🔧 Configuration Options
 
 ### Location Updates
+
 - **Interval**: 7 seconds (configurable in `constants/config.js`)
 - **Accuracy**: High accuracy GPS
 - **Distance threshold**: 10 meters
 
 ### WebSocket
+
 - **Auto-reconnect**: Yes, with exponential backoff
 - **Max reconnect attempts**: 5
 - **Reconnect interval**: 5 seconds (increasing)
 
 ### ETA Updates
+
 - **Interval**: 30 seconds
 - **Traffic consideration**: Yes, uses real-time traffic data
 - **Mode**: Driving mode optimized for delivery
@@ -132,6 +135,7 @@ rider-tracker/
 ## 📡 WebSocket Message Format
 
 ### Outgoing (Rider → Server)
+
 ```json
 {
   "type": "location_update",
@@ -148,7 +152,9 @@ rider-tracker/
 ```
 
 ### Incoming (Server → Rider)
+
 The app logs all incoming messages to console. Common message types:
+
 - Delivery assignments
 - Route updates
 - Emergency alerts
@@ -207,12 +213,15 @@ The app logs all incoming messages to console. Common message types:
 ### Common Issues
 
 1. **"Unable to resolve react-native-maps"**
+
    - Run: `npx expo install react-native-maps`
 
 2. **"Location permission denied"**
+
    - Check device settings for location permissions
 
 3. **"WebSocket connection failed"**
+
    - Verify WebSocket server is running
    - Check network connectivity
 
@@ -234,5 +243,3 @@ This project is licensed under the MIT License.
 5. Submit a pull request
 
 ---
-
-Built with ❤️ for Nigerian logistics riders
