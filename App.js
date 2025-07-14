@@ -1,39 +1,43 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { StyleSheet, View, Alert } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
 
 // Custom hooks
-import { useLocation } from './hooks/useLocation';
-import { useWebSocket } from './hooks/useWebSocket';
+import { useLocation } from "./hooks/useLocation";
+import { useWebSocket } from "./hooks/useWebSocket";
 
 // Components
-import LoadingSpinner from './components/LoadingSpinner';
-import ErrorDisplay from './components/ErrorDisplay';
-import StatusPanel from './components/StatusPanel';
+import LoadingSpinner from "./components/LoadingSpinner";
+import ErrorDisplay from "./components/ErrorDisplay";
+import StatusPanel from "./components/StatusPanel";
 
 // Utils and constants
-import { calculateETA, getDirections, decodePolyline } from './utils/googleMaps';
-import { CONFIG, DUMMY_DESTINATION } from './constants/config';
+import {
+  calculateETA,
+  getDirections,
+  decodePolyline,
+} from "./utils/googleMaps";
+import { CONFIG, DUMMY_DESTINATION } from "./constants/config";
 
 export default function App() {
   // Location management
-  const { 
-    location, 
-    error: locationError, 
-    permissionStatus, 
+  const {
+    location,
+    error: locationError,
+    permissionStatus,
     isLoading: locationLoading,
-    getCurrentLocation 
+    getCurrentLocation,
   } = useLocation();
 
   // WebSocket connection
   const wsUrl = Constants.expoConfig?.extra?.wsUrl || process.env.WS_URL;
-  const { 
-    isConnected, 
-    error: wsError, 
-    lastMessage, 
+  const {
+    isConnected,
+    error: wsError,
+    lastMessage,
     reconnectAttempts,
-    sendLocationUpdate 
+    sendLocationUpdate,
   } = useWebSocket(wsUrl);
 
   // State management
@@ -51,18 +55,21 @@ export default function App() {
       setIsLoadingETA(true);
       const etaResult = await calculateETA(location.coords, DUMMY_DESTINATION);
       setEta(etaResult);
-      
+
       // Get route directions
       setIsLoadingRoute(true);
-      const routeResult = await getDirections(location.coords, DUMMY_DESTINATION);
-      
+      const routeResult = await getDirections(
+        location.coords,
+        DUMMY_DESTINATION
+      );
+
       if (routeResult.success) {
         const coordinates = decodePolyline(routeResult.polyline);
         setRoute(coordinates);
       }
     } catch (error) {
-      console.error('Error updating ETA and route:', error);
-      Alert.alert('Error', 'Failed to calculate route and ETA');
+      console.error("Error updating ETA and route:", error);
+      Alert.alert("Error", "Failed to calculate route and ETA");
     } finally {
       setIsLoadingETA(false);
       setIsLoadingRoute(false);
@@ -74,7 +81,7 @@ export default function App() {
     if (location && isConnected) {
       const success = sendLocationUpdate(location);
       if (!success) {
-        console.warn('Failed to send location update');
+        console.warn("Failed to send location update");
       }
     }
   }, [location, isConnected, sendLocationUpdate]);
@@ -105,7 +112,7 @@ export default function App() {
   }
 
   // Render permission denied state
-  if (permissionStatus !== 'granted') {
+  if (permissionStatus !== "granted") {
     return (
       <ErrorDisplay
         title="Location Permission Required"
@@ -188,8 +195,10 @@ export default function App() {
           {/* Loading indicators */}
           {(isLoadingETA || isLoadingRoute) && (
             <View style={styles.loadingOverlay}>
-              <LoadingSpinner 
-                message={isLoadingETA ? "Calculating ETA..." : "Loading route..."} 
+              <LoadingSpinner
+                message={
+                  isLoadingETA ? "Calculating ETA..." : "Loading route..."
+                }
                 size="small"
               />
             </View>
@@ -203,20 +212,20 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1 
+  container: {
+    flex: 1,
   },
-  map: { 
-    flex: 1 
+  map: {
+    flex: 1,
   },
   loadingOverlay: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 30,
     right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 8,
     padding: 15,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,

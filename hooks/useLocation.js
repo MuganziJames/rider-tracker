@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import * as Location from 'expo-location';
-import { CONFIG } from '../constants/config';
+import { useState, useEffect, useRef } from "react";
+import * as Location from "expo-location";
+import { CONFIG } from "../constants/config";
 
 export const useLocation = () => {
   const [location, setLocation] = useState(null);
   const [error, setError] = useState(null);
-  const [permissionStatus, setPermissionStatus] = useState('undetermined');
+  const [permissionStatus, setPermissionStatus] = useState("undetermined");
   const [isLoading, setIsLoading] = useState(true);
   const locationSubscription = useRef(null);
 
@@ -14,16 +14,16 @@ export const useLocation = () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setPermissionStatus(status);
-      
-      if (status === 'granted') {
+
+      if (status === "granted") {
         return true;
       } else {
-        setError('Location permission was denied');
+        setError("Location permission was denied");
         return false;
       }
     } catch (err) {
-      setError('Failed to request location permissions');
-      console.error('Permission request error:', err);
+      setError("Failed to request location permissions");
+      console.error("Permission request error:", err);
       return false;
     }
   };
@@ -36,13 +36,13 @@ export const useLocation = () => {
         timeout: CONFIG.LOCATION_ACCURACY.timeout,
         maximumAge: CONFIG.LOCATION_ACCURACY.maximumAge,
       });
-      
+
       setLocation(currentLocation);
       setError(null);
       return currentLocation;
     } catch (err) {
-      setError('Failed to get current location');
-      console.error('Location fetch error:', err);
+      setError("Failed to get current location");
+      console.error("Location fetch error:", err);
       return null;
     }
   };
@@ -66,8 +66,8 @@ export const useLocation = () => {
         }
       );
     } catch (err) {
-      setError('Failed to start location tracking');
-      console.error('Location tracking error:', err);
+      setError("Failed to start location tracking");
+      console.error("Location tracking error:", err);
     }
   };
 
@@ -83,13 +83,13 @@ export const useLocation = () => {
   useEffect(() => {
     const initializeLocation = async () => {
       setIsLoading(true);
-      
+
       const hasPermission = await requestPermissions();
       if (hasPermission) {
         await getCurrentLocation();
         await startLocationTracking();
       }
-      
+
       setIsLoading(false);
     };
 
