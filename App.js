@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { StyleSheet, View, Alert } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import Constants from "expo-constants";
 
@@ -115,112 +116,129 @@ export default function App() {
 
   // Render loading state
   if (locationLoading) {
-    return <LoadingSpinner message="Getting your location..." />;
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <LoadingSpinner message="Getting your location..." />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
   }
 
   // Render permission denied state
   if (permissionStatus !== "granted") {
     return (
-      <ErrorDisplay
-        title="Location Permission Required"
-        message="This app needs access to your location to track deliveries and provide navigation. Please grant location permission to continue."
-        onRetry={handleLocationRetry}
-        retryText="Grant Permission"
-      />
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <ErrorDisplay
+            title="Location Permission Required"
+            message="This app needs access to your location to track deliveries and provide navigation. Please grant location permission to continue."
+            onRetry={handleLocationRetry}
+            retryText="Grant Permission"
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   // Render location error state
   if (locationError && !location) {
     return (
-      <ErrorDisplay
-        title="Location Error"
-        message={locationError}
-        onRetry={handleLocationRetry}
-        retryText="Retry"
-      />
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <ErrorDisplay
+            title="Location Error"
+            message={locationError}
+            onRetry={handleLocationRetry}
+            retryText="Retry"
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   // Render map
   return (
-    <View style={styles.container}>
-      {location ? (
-        <>
-          <MapView
-            style={styles.map}
-            region={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: CONFIG.MAP_DELTA.latitude,
-              longitudeDelta: CONFIG.MAP_DELTA.longitude,
-            }}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-            showsTraffic={true}
-            loadingEnabled={true}
-          >
-            {/* Rider's current location marker */}
-            <Marker
-              coordinate={{
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        {location ? (
+          <>
+            <MapView
+              style={styles.map}
+              region={{
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
+                latitudeDelta: CONFIG.MAP_DELTA.latitude,
+                longitudeDelta: CONFIG.MAP_DELTA.longitude,
               }}
-              title="You (Rider)"
-              description="Current location"
-              pinColor="#007AFF"
-            />
-
-            {/* Destination marker */}
-            <Marker
-              coordinate={DUMMY_DESTINATION}
-              title={DUMMY_DESTINATION.name}
-              description="Delivery destination"
-              pinColor="#FF3B30"
-            />
-
-            {/* Route polyline */}
-            {route && route.length > 0 && (
-              <Polyline
-                coordinates={route}
-                strokeColor="#007AFF"
-                strokeWidth={4}
-                strokePattern={[1]}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+              showsTraffic={true}
+              loadingEnabled={true}
+            >
+              {/* Rider's current location marker */}
+              <Marker
+                coordinate={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                }}
+                title="You (Rider)"
+                description="Current location"
+                pinColor="#007AFF"
               />
+
+              {/* Destination marker */}
+              <Marker
+                coordinate={DUMMY_DESTINATION}
+                title={DUMMY_DESTINATION.name}
+                description="Delivery destination"
+                pinColor="#FF3B30"
+              />
+
+              {/* Route polyline */}
+              {route && route.length > 0 && (
+                <Polyline
+                  coordinates={route}
+                  strokeColor="#007AFF"
+                  strokeWidth={4}
+                  strokePattern={[1]}
+                />
+              )}
+            </MapView>
+
+            {/* Status panel overlay */}
+            <StatusPanel
+              isConnected={isConnected}
+              location={location}
+              eta={eta}
+              wsReconnectAttempts={reconnectAttempts}
+              lastMessage={lastMessage}
+            />
+
+            {/* Loading indicators */}
+            {(isLoadingETA || isLoadingRoute) && (
+              <View style={styles.loadingOverlay}>
+                <LoadingSpinner
+                  message={
+                    isLoadingETA ? "Calculating ETA..." : "Loading route..."
+                  }
+                  size="small"
+                />
+              </View>
             )}
-          </MapView>
-
-          {/* Status panel overlay */}
-          <StatusPanel
-            isConnected={isConnected}
-            location={location}
-            eta={eta}
-            wsReconnectAttempts={reconnectAttempts}
-            lastMessage={lastMessage}
-          />
-
-          {/* Loading indicators */}
-          {(isLoadingETA || isLoadingRoute) && (
-            <View style={styles.loadingOverlay}>
-              <LoadingSpinner
-                message={
-                  isLoadingETA ? "Calculating ETA..." : "Loading route..."
-                }
-                size="small"
-              />
-            </View>
-          )}
-        </>
-      ) : (
-        <LoadingSpinner message="Loading map..." />
-      )}
-    </View>
+          </>
+        ) : (
+          <LoadingSpinner message="Loading map..." />
+        )}
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f5f5f5", // Nice background color for safe areas
   },
   map: {
     flex: 1,
@@ -229,13 +247,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 30,
     right: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 12,
     padding: 15,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

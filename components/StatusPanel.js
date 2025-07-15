@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const StatusPanel = ({
   isConnected,
@@ -8,8 +9,10 @@ const StatusPanel = ({
   wsReconnectAttempts,
   lastMessage,
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { top: insets.top + 10 }]}>
       {/* WebSocket Status */}
       <View style={styles.statusRow}>
         <View
@@ -26,7 +29,7 @@ const StatusPanel = ({
       </View>
 
       {/* Location Status */}
-      {location && (
+      {location ? (
         <View style={styles.statusRow}>
           <View style={[styles.indicator, { backgroundColor: "#2196F3" }]} />
           <Text style={styles.statusText}>
@@ -34,29 +37,29 @@ const StatusPanel = ({
             {location.coords.longitude.toFixed(6)}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* ETA Display */}
-      {eta && eta.success && (
+      {eta && eta.success ? (
         <View style={styles.statusRow}>
           <View style={[styles.indicator, { backgroundColor: "#FF9800" }]} />
           <Text style={styles.statusText}>
             ETA: {eta.duration?.text} ({eta.distance?.text})
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Last Message */}
-      {lastMessage && (
+      {lastMessage ? (
         <View style={styles.messageContainer}>
           <Text style={styles.messageLabel}>Last Server Message:</Text>
           <Text style={styles.messageText}>
             {typeof lastMessage === "object"
               ? JSON.stringify(lastMessage, null, 2)
-              : lastMessage}
+              : String(lastMessage)}
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 };
@@ -64,17 +67,16 @@ const StatusPanel = ({
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 50,
     left: 10,
     right: 10,
     backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 15,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
   statusRow: {
     flexDirection: "row",
