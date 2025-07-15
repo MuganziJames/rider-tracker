@@ -13,8 +13,9 @@ export const useWebSocket = (url) => {
   // Connect to WebSocket
   const connect = useCallback(() => {
     try {
-      if (!url) {
-        setError("WebSocket URL not provided");
+      if (!url || url.trim() === "") {
+        console.log("WebSocket URL not configured, skipping connection");
+        setError("WebSocket URL not configured");
         return;
       }
 

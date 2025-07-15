@@ -1,9 +1,7 @@
 import Constants from "expo-constants";
 
-// Get API key from environment
-const GOOGLE_MAPS_API_KEY =
-  Constants.expoConfig?.extra?.googleMapsApiKey ||
-  process.env.GOOGLE_MAPS_API_KEY;
+// Get API key from environment - Using only secure Expo configuration
+const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
 
 // Calculate ETA using Google Distance Matrix API
 export const calculateETA = async (origin, destination) => {
@@ -134,4 +132,84 @@ export const calculateDistance = (point1, point2) => {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
   return distance;
+};
+
+// Helper function to get ETA using Google Distance Matrix API
+export const getETA = async (origin, destination) => {
+  try {
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.error("Google Maps API key not configured");
+      return null;
+    }
+
+    // Validate coordinates format
+    if (!origin || !destination || origin === destination) {
+      console.error(
+        "Invalid coordinates: origin and destination must be different"
+      );
+      return null;
+    }
+
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`
+    );
+
+    const data = await response.json();
+
+    if (data.status !== "OK") {
+      console.error("ETA API error:", data.status);
+      return null;
+    }
+
+    const element = data.rows[0]?.elements[0];
+    if (!element || element.status !== "OK") {
+      console.error("ETA fetch error:", element?.status || "NO_ROUTE");
+      return null;
+    }
+
+    return element.duration.text;
+  } catch (error) {
+    console.error("ETA calculation error:", error);
+    return null;
+  }
+};
+
+// Helper function to get route polyline using Google Directions API
+export const getRoutePolyline = async (origin, destination) => {
+  try {
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.error("Google Maps API key not configured");
+      return null;
+    }
+
+    // Validate coordinates format
+    if (!origin || !destination || origin === destination) {
+      console.error(
+        "Invalid coordinates: origin and destination must be different"
+      );
+      return null;
+    }
+
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`
+    );
+
+    const data = await response.json();
+
+    if (data.status !== "OK") {
+      console.error("Directions fetch error:", data.status);
+      return null;
+    }
+
+    if (!data.routes || data.routes.length === 0) {
+      console.error("Directions fetch error: ZERO_RESULTS");
+      return null;
+    }
+
+    const points = data.routes[0].overview_polyline.points;
+    return points;
+  } catch (error) {
+    console.error("Directions fetch error:", error);
+    return null;
+  }
 };

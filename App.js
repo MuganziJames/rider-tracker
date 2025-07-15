@@ -18,9 +18,16 @@ import {
   getDirections,
   decodePolyline,
 } from "./utils/googleMaps";
+import { getWebSocketUrl, validateGoogleMapsConfig } from "./utils/devConfig";
 import { CONFIG, DUMMY_DESTINATION } from "./constants/config";
 
 export default function App() {
+  // Initialize and validate configuration
+  useEffect(() => {
+    console.log("🚀 Rider Tracker App Starting...");
+    validateGoogleMapsConfig();
+  }, []);
+
   // Location management
   const {
     location,
@@ -30,8 +37,8 @@ export default function App() {
     getCurrentLocation,
   } = useLocation();
 
-  // WebSocket connection
-  const wsUrl = Constants.expoConfig?.extra?.wsUrl || process.env.WS_URL;
+  // WebSocket connection - safer URL handling
+  const wsUrl = getWebSocketUrl();
   const {
     isConnected,
     error: wsError,
