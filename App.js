@@ -33,7 +33,6 @@ const { width, height } = Dimensions.get("window");
 export default function App() {
   // Initialize and validate configuration
   useEffect(() => {
-    console.log("🚀 Rider Tracker App Starting...");
     validateGoogleMapsConfig();
   }, []);
 
@@ -166,28 +165,15 @@ export default function App() {
   const handleSuggestionPress = useCallback(
     async (prediction) => {
       if (!activeInput) {
-        console.log("Suggestion pressed but no active input - ignoring");
         return;
       }
 
-      console.log(
-        "Suggestion selected:",
-        prediction.description,
-        "for:",
-        activeInput
-      );
       setIsProcessingSuggestion(true); // Block map interactions
       setIsLoadingSuggestions(true);
       setShowSuggestions(false);
 
       const placeDetails = await getPlaceDetails(prediction.place_id);
       if (placeDetails.success) {
-        console.log("Place details received:", {
-          name: placeDetails.name,
-          address: placeDetails.address,
-          location: placeDetails.location,
-        });
-
         // Prioritize readable name over address, and clean up Plus Codes
         let displayAddress = placeDetails.name || placeDetails.address;
 
@@ -210,8 +196,6 @@ export default function App() {
           displayAddress = placeDetails.name || "Selected Location";
         }
 
-        console.log("Final display address:", displayAddress);
-
         const locationData = {
           location: placeDetails.location,
           address: displayAddress,
@@ -219,11 +203,9 @@ export default function App() {
         };
 
         if (activeInput === "origin") {
-          console.log("Setting origin location:", locationData);
           setOriginLocation(locationData.location);
           setOriginAddress(locationData.address);
         } else {
-          console.log("Setting destination location:", locationData);
           setDestinationLocation(locationData.location);
           setDestinationAddress(locationData.address);
         }
@@ -246,7 +228,6 @@ export default function App() {
   // Handle input focus
   const handleInputFocus = useCallback(
     (type) => {
-      console.log("Input focused:", type);
       setActiveInput(type);
       if (suggestions.length > 0) {
         setShowSuggestions(true);
@@ -257,15 +238,11 @@ export default function App() {
 
   // Handle input blur
   const handleInputBlur = useCallback(() => {
-    console.log("Input blurred, preventBlur:", preventBlur);
-
     // Don't clear active input if we're preventing blur (user interacting with suggestions)
     if (preventBlur) {
-      console.log("Blur prevented - keeping active input");
       return;
     }
 
-    console.log("Processing blur - clearing active input");
     // Longer delay to allow suggestion taps to be processed properly
     setTimeout(() => {
       if (!preventBlur) {
@@ -331,20 +308,10 @@ export default function App() {
     async (event) => {
       // Don't allow map press during animations, suggestion processing, or when no input is active
       if (!activeInput || isMapAnimating || isProcessingSuggestion) {
-        console.log(
-          "Map pressed but conditions not met - ignoring. ActiveInput:",
-          activeInput,
-          "IsAnimating:",
-          isMapAnimating,
-          "IsProcessingSuggestion:",
-          isProcessingSuggestion
-        );
         return;
       }
 
-      console.log("Map pressed with active input:", activeInput);
       const coordinate = event.nativeEvent.coordinate;
-      console.log("Map press coordinates:", coordinate);
 
       // Reverse geocode to get address
       const geocodeResult = await reverseGeocode(
@@ -354,8 +321,6 @@ export default function App() {
       const address = geocodeResult.success
         ? geocodeResult.address
         : "Selected Location";
-
-      console.log("Setting location via map press:", address);
 
       if (activeInput === "origin") {
         setOriginLocation(coordinate);
@@ -388,16 +353,12 @@ export default function App() {
       return;
     }
 
-    console.log("🔄 Calculating ETA");
-
     try {
       setIsLoadingETA(true);
 
       // Calculate ETA using Distance Matrix API
       const etaResult = await calculateETA(originLocation, destinationLocation);
       setEta(etaResult);
-
-      console.log("✅ ETA calculated successfully");
     } catch (error) {
       console.error("Error updating ETA:", error);
     } finally {
@@ -430,9 +391,8 @@ export default function App() {
       const newLocation = await getCurrentLocation();
 
       if (newLocation) {
-        console.log("Successfully retrieved location on retry");
+        // Successfully retrieved location on retry
       } else {
-        console.log("Trying with lower accuracy on retry");
         await handleLocationError("Initial location attempt failed");
       }
     } catch (error) {
@@ -527,11 +487,6 @@ export default function App() {
               precision="high"
               timePrecision="now"
               onReady={(result) => {
-                console.log("✅ Route ready:", {
-                  distance: result.distance,
-                  duration: result.duration,
-                  coordinates: result.coordinates.length,
-                });
                 // Fit map to show the route with proper padding
                 if (mapRef.current && result.coordinates?.length > 0) {
                   mapRef.current.fitToCoordinates(result.coordinates, {
@@ -541,7 +496,6 @@ export default function App() {
                 }
               }}
               onError={(errorMessage) => {
-                console.log("❌ MapViewDirections error:", errorMessage);
                 // You could show a user-friendly error message here
                 Alert.alert(
                   "Route Error",
@@ -550,7 +504,7 @@ export default function App() {
                 );
               }}
               onStart={(params) => {
-                console.log("🔄 Starting route calculation...", params);
+                // Starting route calculation...
               }}
             />
           )}

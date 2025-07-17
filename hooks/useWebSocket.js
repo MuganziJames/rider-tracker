@@ -15,7 +15,6 @@ export const useWebSocket = (url) => {
   const connect = useCallback(() => {
     try {
       if (!url || url.trim() === "") {
-        console.log("WebSocket URL not configured, skipping connection");
         setError("WebSocket URL not configured");
         return;
       }
@@ -25,11 +24,9 @@ export const useWebSocket = (url) => {
         ws.current.close();
       }
 
-      console.log("Connecting to WebSocket:", url);
       ws.current = new WebSocket(url);
 
       ws.current.onopen = () => {
-        console.log("WebSocket connected successfully");
         setIsConnected(true);
         setError(null);
         setReconnectAttempts(0);
@@ -45,10 +42,8 @@ export const useWebSocket = (url) => {
       ws.current.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log("WebSocket message received:", message);
           setLastMessage(message);
         } catch (err) {
-          console.log("WebSocket raw message:", event.data);
           setLastMessage({ raw: event.data });
         }
       };
@@ -59,7 +54,6 @@ export const useWebSocket = (url) => {
       };
 
       ws.current.onclose = (event) => {
-        console.log("WebSocket connection closed:", event.code, event.reason);
         setIsConnected(false);
 
         // Attempt to reconnect if not intentionally closed
@@ -84,11 +78,6 @@ export const useWebSocket = (url) => {
 
     const delay =
       CONFIG.WEBSOCKET_RECONNECT_INTERVAL * Math.pow(2, reconnectAttempts);
-    console.log(
-      `Scheduling WebSocket reconnect in ${delay}ms (attempt ${
-        reconnectAttempts + 1
-      })`
-    );
 
     reconnectTimeout.current = setTimeout(() => {
       setReconnectAttempts((prev) => prev + 1);
@@ -103,7 +92,6 @@ export const useWebSocket = (url) => {
         const messageString =
           typeof message === "string" ? message : JSON.stringify(message);
         ws.current.send(messageString);
-        console.log("WebSocket message sent:", message);
         return true;
       } catch (err) {
         console.error("Failed to send WebSocket message:", err);
@@ -111,7 +99,6 @@ export const useWebSocket = (url) => {
         return false;
       }
     } else {
-      console.warn("WebSocket not connected, message not sent:", message);
       return false;
     }
   }, []);

@@ -8,17 +8,6 @@ export const getDevConfig = () => {
     isDevelopment: __DEV__,
   };
 
-  console.log("🔧 Development Configuration:");
-  console.log(
-    "- Google Maps API Key:",
-    config.googleMapsApiKey ? "✅ Configured" : "❌ Missing"
-  );
-  console.log("- WebSocket URL:", config.wsUrl || "❌ Not configured");
-  console.log(
-    "- Environment:",
-    config.isDevelopment ? "Development" : "Production"
-  );
-
   return config;
 };
 
@@ -50,6 +39,5 @@ export const validateGoogleMapsConfig = () => {
     return false;
   }
 
-  console.log("✅ Google Maps API key configured");
   return true;
 };

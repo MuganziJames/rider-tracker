@@ -18,7 +18,6 @@ export const searchPlaces = async (query) => {
       query
     )}&key=${GOOGLE_MAPS_API_KEY}`;
 
-    console.log("Searching places:", query);
     const response = await fetch(url);
     const data = await response.json();
 
@@ -49,7 +48,6 @@ export const getPlaceDetails = async (placeId) => {
 
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address,name&key=${GOOGLE_MAPS_API_KEY}`;
 
-    console.log("Getting place details for:", placeId);
     const response = await fetch(url);
     const data = await response.json();
 
@@ -84,7 +82,6 @@ export const reverseGeocode = async (latitude, longitude) => {
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
 
-    console.log("Reverse geocoding:", latitude, longitude);
     const response = await fetch(url);
     const data = await response.json();
 
@@ -121,7 +118,6 @@ export const calculateETA = async (origin, destination) => {
 
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originStr}&destinations=${destinationStr}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`;
 
-    console.log("Fetching ETA from Google Distance Matrix API...");
     const response = await fetch(url);
     const data = await response.json();
 
