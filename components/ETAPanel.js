@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { lagosColors } from "../constants/mapStyles";
 
 const ETAPanel = ({
@@ -53,11 +54,14 @@ const ETAPanel = ({
 
   if (!isVisible) return null;
 
+  const insets = useSafeAreaInsets();
   const trafficInfo = formatTrafficInfo(eta);
   const shouldShowETA = eta && eta.success && !isLoading;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}
+    >
       {/* Route Information */}
       <View style={styles.routeContainer}>
         <View style={styles.locationRow}>

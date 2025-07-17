@@ -13,6 +13,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorDisplay from "./components/ErrorDisplay";
 import LocationSearchInput from "./components/LocationSearchInput";
+import LocationSuggestions from "./components/LocationSuggestions";
 import ETAPanel from "./components/ETAPanel";
 
 // Utils and constants
@@ -20,6 +21,8 @@ import {
   calculateETA,
   calculateDistance,
   reverseGeocode,
+  searchPlaces,
+  getPlaceDetails,
 } from "./utils/googleMaps";
 import { getWebSocketUrl, validateGoogleMapsConfig } from "./utils/devConfig";
 import { CONFIG } from "./constants/config";
@@ -65,11 +68,22 @@ export default function App() {
   const [eta, setEta] = useState(null);
   const [isLoadingETA, setIsLoadingETA] = useState(false);
 
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
+  // Map interaction state
+  const [isMapAnimating, setIsMapAnimating] = useState(false);
+  const [isProcessingSuggestion, setIsProcessingSuggestion] = useState(false);
+  const [preventBlur, setPreventBlur] = useState(false);
+
   // Get Google Maps API key for MapViewDirections
   const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
 
   // Map reference for controlling map view
   const mapRef = useRef(null);
+  const searchTimeout = useRef(null);
 
   // Default map region (centered on Nigeria)
   const defaultRegion = {
@@ -83,6 +97,8 @@ export default function App() {
   const fitMapToMarkers = useCallback(() => {
     if (!mapRef.current) return;
 
+    setIsMapAnimating(true);
+
     if (originLocation && destinationLocation) {
       // Fit to show both origin and destination
       mapRef.current.fitToCoordinates([originLocation, destinationLocation], {
@@ -90,7 +106,7 @@ export default function App() {
         animated: true,
       });
     } else if (originLocation) {
-      // Center on origin
+      // Center on origin only - don't auto-center on current location
       mapRef.current.animateToRegion(
         {
           ...originLocation,
@@ -99,19 +115,166 @@ export default function App() {
         },
         1000
       );
-    } else if (currentLocation) {
-      // Center on current location
+    } else if (destinationLocation) {
+      // Center on destination if only destination is set
       mapRef.current.animateToRegion(
         {
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
+          ...destinationLocation,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         },
         1000
       );
     }
-  }, [originLocation, destinationLocation, currentLocation]);
+
+    // Re-enable map interaction after animation
+    setTimeout(() => setIsMapAnimating(false), 1500);
+    // Removed: auto-centering on current location when neither origin nor destination is set
+  }, [originLocation, destinationLocation]);
+
+  // Handle text change and search suggestions
+  const handleTextChange = useCallback((text, type) => {
+    if (type === "origin") {
+      setOriginAddress(text);
+    } else {
+      setDestinationAddress(text);
+    }
+
+    // Clear previous timeout
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    // Debounce search
+    searchTimeout.current = setTimeout(async () => {
+      if (text.trim().length >= 2) {
+        setIsLoadingSuggestions(true);
+        const result = await searchPlaces(text);
+        if (result.success) {
+          setSuggestions(result.predictions);
+          setShowSuggestions(true);
+        }
+        setIsLoadingSuggestions(false);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+  }, []);
+
+  // Handle suggestion selection
+  const handleSuggestionPress = useCallback(
+    async (prediction) => {
+      if (!activeInput) {
+        console.log("Suggestion pressed but no active input - ignoring");
+        return;
+      }
+
+      console.log(
+        "Suggestion selected:",
+        prediction.description,
+        "for:",
+        activeInput
+      );
+      setIsProcessingSuggestion(true); // Block map interactions
+      setIsLoadingSuggestions(true);
+      setShowSuggestions(false);
+
+      const placeDetails = await getPlaceDetails(prediction.place_id);
+      if (placeDetails.success) {
+        console.log("Place details received:", {
+          name: placeDetails.name,
+          address: placeDetails.address,
+          location: placeDetails.location,
+        });
+
+        // Prioritize readable name over address, and clean up Plus Codes
+        let displayAddress = placeDetails.name || placeDetails.address;
+
+        // If the address contains Plus Codes, try to use a cleaner version
+        if (displayAddress.includes("+") && placeDetails.address) {
+          // Use the formatted address but try to clean it up
+          const addressParts = placeDetails.address.split(",");
+          if (addressParts.length > 1) {
+            // Take the first few parts that don't contain Plus Codes
+            displayAddress = addressParts
+              .filter((part) => !part.trim().includes("+"))
+              .slice(0, 2)
+              .join(", ")
+              .trim();
+          }
+        }
+
+        // Fallback to place name if address is still problematic
+        if (!displayAddress || displayAddress.includes("+")) {
+          displayAddress = placeDetails.name || "Selected Location";
+        }
+
+        console.log("Final display address:", displayAddress);
+
+        const locationData = {
+          location: placeDetails.location,
+          address: displayAddress,
+          name: placeDetails.name,
+        };
+
+        if (activeInput === "origin") {
+          console.log("Setting origin location:", locationData);
+          setOriginLocation(locationData.location);
+          setOriginAddress(locationData.address);
+        } else {
+          console.log("Setting destination location:", locationData);
+          setDestinationLocation(locationData.location);
+          setDestinationAddress(locationData.address);
+        }
+
+        setActiveInput(null);
+
+        // Fit map after a short delay
+        setTimeout(() => fitMapToMarkers(), 500);
+      } else {
+        console.error("Failed to get place details:", placeDetails.error);
+      }
+      setIsLoadingSuggestions(false);
+
+      // Allow map interactions again after a delay
+      setTimeout(() => setIsProcessingSuggestion(false), 1000);
+    },
+    [activeInput, fitMapToMarkers]
+  );
+
+  // Handle input focus
+  const handleInputFocus = useCallback(
+    (type) => {
+      console.log("Input focused:", type);
+      setActiveInput(type);
+      if (suggestions.length > 0) {
+        setShowSuggestions(true);
+      }
+    },
+    [suggestions]
+  );
+
+  // Handle input blur
+  const handleInputBlur = useCallback(() => {
+    console.log("Input blurred, preventBlur:", preventBlur);
+
+    // Don't clear active input if we're preventing blur (user interacting with suggestions)
+    if (preventBlur) {
+      console.log("Blur prevented - keeping active input");
+      return;
+    }
+
+    console.log("Processing blur - clearing active input");
+    // Longer delay to allow suggestion taps to be processed properly
+    setTimeout(() => {
+      if (!preventBlur) {
+        // Double check
+        setActiveInput(null);
+        setShowSuggestions(false);
+      }
+    }, 300); // Increased from 150ms to 300ms
+  }, [preventBlur]);
 
   // Handle using current location as origin
   const handleUseCurrentLocation = useCallback(async () => {
@@ -166,9 +329,22 @@ export default function App() {
   // Handle map tap to set location
   const handleMapPress = useCallback(
     async (event) => {
-      if (!activeInput) return;
+      // Don't allow map press during animations, suggestion processing, or when no input is active
+      if (!activeInput || isMapAnimating || isProcessingSuggestion) {
+        console.log(
+          "Map pressed but conditions not met - ignoring. ActiveInput:",
+          activeInput,
+          "IsAnimating:",
+          isMapAnimating,
+          "IsProcessingSuggestion:",
+          isProcessingSuggestion
+        );
+        return;
+      }
 
+      console.log("Map pressed with active input:", activeInput);
       const coordinate = event.nativeEvent.coordinate;
+      console.log("Map press coordinates:", coordinate);
 
       // Reverse geocode to get address
       const geocodeResult = await reverseGeocode(
@@ -178,6 +354,8 @@ export default function App() {
       const address = geocodeResult.success
         ? geocodeResult.address
         : "Selected Location";
+
+      console.log("Setting location via map press:", address);
 
       if (activeInput === "origin") {
         setOriginLocation(coordinate);
@@ -189,7 +367,7 @@ export default function App() {
 
       setActiveInput(null);
     },
-    [activeInput]
+    [activeInput, isMapAnimating, isProcessingSuggestion]
   );
 
   // Swap origin and destination
@@ -384,23 +562,34 @@ export default function App() {
             placeholder="Choose starting location"
             value={originAddress}
             onLocationSelect={(data) => handleLocationSelect("origin", data)}
-            onTextChange={setOriginAddress}
+            onTextChange={(text) => handleTextChange(text, "origin")}
             showCurrentLocationButton={!!currentLocation}
             onUseCurrentLocation={handleUseCurrentLocation}
             isActive={activeInput === "origin"}
-            onFocus={() => setActiveInput("origin")}
+            onFocus={() => handleInputFocus("origin")}
+            onBlur={handleInputBlur}
           />
           <View style={styles.searchSpacing} />
-          <LocationSearchInput
-            placeholder="Choose destination"
-            value={destinationAddress}
-            onLocationSelect={(data) =>
-              handleLocationSelect("destination", data)
-            }
-            onTextChange={setDestinationAddress}
-            isActive={activeInput === "destination"}
-            onFocus={() => setActiveInput("destination")}
-          />
+          <View style={styles.destinationContainer}>
+            <LocationSearchInput
+              placeholder="Choose destination"
+              value={destinationAddress}
+              onLocationSelect={(data) =>
+                handleLocationSelect("destination", data)
+              }
+              onTextChange={(text) => handleTextChange(text, "destination")}
+              isActive={activeInput === "destination"}
+              onFocus={() => handleInputFocus("destination")}
+              onBlur={handleInputBlur}
+            />
+            <LocationSuggestions
+              suggestions={suggestions}
+              isVisible={showSuggestions}
+              onSuggestionPress={handleSuggestionPress}
+              onSuggestionTouchStart={() => setPreventBlur(true)}
+              onSuggestionTouchEnd={() => setPreventBlur(false)}
+            />
+          </View>
         </View>
 
         {/* ETA Panel */}
@@ -434,5 +623,9 @@ const styles = StyleSheet.create({
   },
   searchSpacing: {
     height: 12,
+  },
+  destinationContainer: {
+    position: "relative",
+    zIndex: 1000,
   },
 });
