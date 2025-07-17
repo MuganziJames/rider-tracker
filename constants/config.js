@@ -3,8 +3,11 @@ export const CONFIG = {
   // Location update interval in milliseconds (7 seconds)
   LOCATION_UPDATE_INTERVAL: 7000,
 
-  // ETA update interval in milliseconds (30 seconds)
-  ETA_UPDATE_INTERVAL: 30000,
+  // ETA update interval in milliseconds (120 seconds - increased to reduce API calls)
+  ETA_UPDATE_INTERVAL: 120000,
+
+  // Minimum distance (in km) to trigger a new route calculation
+  MIN_DISTANCE_FOR_ROUTE_UPDATE: 0.1, // 100 meters
 
   // Map configuration
   MAP_DELTA: {
@@ -15,8 +18,9 @@ export const CONFIG = {
   // Location accuracy
   LOCATION_ACCURACY: {
     enableHighAccuracy: true,
-    timeout: 20000,
+    timeout: 15000, // Reduced from 20000 for faster initial fix
     maximumAge: 1000,
+    accuracyThreshold: 20, // Maximum accuracy in meters to consider a location "good"
   },
 
   // WebSocket reconnection settings

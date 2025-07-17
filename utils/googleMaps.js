@@ -3,6 +3,112 @@ import Constants from "expo-constants";
 // Get API key from environment - Using only secure Expo configuration
 const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
 
+// Google Places Autocomplete API
+export const searchPlaces = async (query) => {
+  try {
+    if (!GOOGLE_MAPS_API_KEY) {
+      throw new Error("Google Maps API key not configured");
+    }
+
+    if (!query || query.trim().length < 2) {
+      return { success: true, predictions: [] };
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+      query
+    )}&key=${GOOGLE_MAPS_API_KEY}`;
+
+    console.log("Searching places:", query);
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === "OK" || data.status === "ZERO_RESULTS") {
+      return {
+        success: true,
+        predictions: data.predictions || [],
+      };
+    } else {
+      throw new Error(data.error_message || "Failed to search places");
+    }
+  } catch (error) {
+    console.error("Places search error:", error);
+    return {
+      success: false,
+      error: error.message,
+      predictions: [],
+    };
+  }
+};
+
+// Get place details by place_id
+export const getPlaceDetails = async (placeId) => {
+  try {
+    if (!GOOGLE_MAPS_API_KEY) {
+      throw new Error("Google Maps API key not configured");
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address,name&key=${GOOGLE_MAPS_API_KEY}`;
+
+    console.log("Getting place details for:", placeId);
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === "OK" && data.result) {
+      return {
+        success: true,
+        location: {
+          latitude: data.result.geometry.location.lat,
+          longitude: data.result.geometry.location.lng,
+        },
+        address: data.result.formatted_address,
+        name: data.result.name,
+      };
+    } else {
+      throw new Error(data.error_message || "Failed to get place details");
+    }
+  } catch (error) {
+    console.error("Place details error:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+// Reverse geocoding - convert coordinates to address
+export const reverseGeocode = async (latitude, longitude) => {
+  try {
+    if (!GOOGLE_MAPS_API_KEY) {
+      throw new Error("Google Maps API key not configured");
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+
+    console.log("Reverse geocoding:", latitude, longitude);
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === "OK" && data.results.length > 0) {
+      return {
+        success: true,
+        address: data.results[0].formatted_address,
+        shortAddress:
+          data.results[0].address_components[0]?.long_name ||
+          data.results[0].formatted_address,
+      };
+    } else {
+      throw new Error("No address found for this location");
+    }
+  } catch (error) {
+    console.error("Reverse geocoding error:", error);
+    return {
+      success: false,
+      error: error.message,
+      address: "Unknown location",
+    };
+  }
+};
+
 // Calculate ETA using Google Distance Matrix API
 export const calculateETA = async (origin, destination) => {
   try {
@@ -39,85 +145,6 @@ export const calculateETA = async (origin, destination) => {
   }
 };
 
-// Get directions from Google Directions API
-export const getDirections = async (origin, destination) => {
-  try {
-    if (!GOOGLE_MAPS_API_KEY) {
-      throw new Error("Google Maps API key not configured");
-    }
-
-    const originStr = `${origin.latitude},${origin.longitude}`;
-    const destinationStr = `${destination.latitude},${destination.longitude}`;
-
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`;
-
-    console.log("Fetching directions from Google Directions API...");
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (data.status === "OK" && data.routes.length > 0) {
-      const route = data.routes[0];
-      return {
-        polyline: route.overview_polyline.points,
-        legs: route.legs,
-        distance: route.legs[0]?.distance,
-        duration: route.legs[0]?.duration,
-        success: true,
-      };
-    } else {
-      throw new Error(data.error_message || "No routes found");
-    }
-  } catch (error) {
-    console.error("Directions fetch error:", error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
-// Decode polyline string to coordinates
-export const decodePolyline = (encoded) => {
-  const coordinates = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-
-  while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const deltaLat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-    lat += deltaLat;
-
-    shift = 0;
-    result = 0;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const deltaLng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-    lng += deltaLng;
-
-    coordinates.push({
-      latitude: lat / 1e5,
-      longitude: lng / 1e5,
-    });
-  }
-
-  return coordinates;
-};
-
 // Calculate distance between two points (Haversine formula)
 export const calculateDistance = (point1, point2) => {
   const R = 6371; // Earth's radius in kilometers
@@ -132,84 +159,4 @@ export const calculateDistance = (point1, point2) => {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
   return distance;
-};
-
-// Helper function to get ETA using Google Distance Matrix API
-export const getETA = async (origin, destination) => {
-  try {
-    if (!GOOGLE_MAPS_API_KEY) {
-      console.error("Google Maps API key not configured");
-      return null;
-    }
-
-    // Validate coordinates format
-    if (!origin || !destination || origin === destination) {
-      console.error(
-        "Invalid coordinates: origin and destination must be different"
-      );
-      return null;
-    }
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`
-    );
-
-    const data = await response.json();
-
-    if (data.status !== "OK") {
-      console.error("ETA API error:", data.status);
-      return null;
-    }
-
-    const element = data.rows[0]?.elements[0];
-    if (!element || element.status !== "OK") {
-      console.error("ETA fetch error:", element?.status || "NO_ROUTE");
-      return null;
-    }
-
-    return element.duration.text;
-  } catch (error) {
-    console.error("ETA calculation error:", error);
-    return null;
-  }
-};
-
-// Helper function to get route polyline using Google Directions API
-export const getRoutePolyline = async (origin, destination) => {
-  try {
-    if (!GOOGLE_MAPS_API_KEY) {
-      console.error("Google Maps API key not configured");
-      return null;
-    }
-
-    // Validate coordinates format
-    if (!origin || !destination || origin === destination) {
-      console.error(
-        "Invalid coordinates: origin and destination must be different"
-      );
-      return null;
-    }
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=driving&traffic_model=best_guess&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`
-    );
-
-    const data = await response.json();
-
-    if (data.status !== "OK") {
-      console.error("Directions fetch error:", data.status);
-      return null;
-    }
-
-    if (!data.routes || data.routes.length === 0) {
-      console.error("Directions fetch error: ZERO_RESULTS");
-      return null;
-    }
-
-    const points = data.routes[0].overview_polyline.points;
-    return points;
-  } catch (error) {
-    console.error("Directions fetch error:", error);
-    return null;
-  }
 };

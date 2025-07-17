@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Platform } from "react-native";
 import { CONFIG } from "../constants/config";
 
 export const useWebSocket = (url) => {
@@ -115,7 +116,7 @@ export const useWebSocket = (url) => {
     }
   }, []);
 
-  // Send location update
+  // Send location update with enhanced data
   const sendLocationUpdate = useCallback(
     (location) => {
       if (!location) return false;
@@ -130,6 +131,14 @@ export const useWebSocket = (url) => {
           accuracy: location.coords.accuracy,
           speed: location.coords.speed,
           heading: location.coords.heading,
+          altitude: location.coords.altitude,
+          altitudeAccuracy: location.coords.altitudeAccuracy,
+          timestamp: location.timestamp,
+        },
+        device_info: {
+          platform: Platform.OS,
+          version: Platform.Version,
+          battery: null, // Could be implemented with a battery tracking hook
         },
       };
 
