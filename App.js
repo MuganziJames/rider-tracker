@@ -12,17 +12,12 @@ import { useWebSocket } from "./hooks/useWebSocket";
 // Components
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorDisplay from "./components/ErrorDisplay";
-import LocationSearchInput from "./components/LocationSearchInput";
-import LocationSuggestions from "./components/LocationSuggestions";
 import ETAPanel from "./components/ETAPanel";
 
 // Utils and constants
 import {
   calculateETA,
-  calculateDistance,
   reverseGeocode,
-  searchPlaces,
-  getPlaceDetails,
 } from "./utils/googleMaps";
 import { getWebSocketUrl, validateGoogleMapsConfig } from "./utils/devConfig";
 import { CONFIG } from "./constants/config";
@@ -30,11 +25,20 @@ import { mapStyles, lagosColors } from "./constants/mapStyles";
 
 const { width, height } = Dimensions.get("window");
 
+// Generate a unique driver ID (you can make this more sophisticated)
+const generateDriverId = () => {
+  return `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
 export default function App() {
+  // Generate or retrieve driver ID
+  const [driverId] = useState(() => generateDriverId());
+
   // Initialize and validate configuration
   useEffect(() => {
     validateGoogleMapsConfig();
-  }, []);
+    console.log("🚛 Driver ID generated:", driverId);
+  }, [driverId]);
 
   // Location management
   const {
@@ -46,7 +50,7 @@ export default function App() {
     handleLocationError,
   } = useLocation();
 
-  // WebSocket connection - safer URL handling
+  // Socket.IO connection with driver identification
   const wsUrl = getWebSocketUrl();
   const {
     isConnected,
@@ -54,324 +58,126 @@ export default function App() {
     lastMessage,
     reconnectAttempts,
     sendLocationUpdate,
-  } = useWebSocket(wsUrl);
+    onJobAssignment,
+    onMessage,
+  } = useWebSocket(wsUrl, driverId);
 
-  // Location picker state
-  const [originLocation, setOriginLocation] = useState(null);
-  const [destinationLocation, setDestinationLocation] = useState(null);
-  const [originAddress, setOriginAddress] = useState("");
-  const [destinationAddress, setDestinationAddress] = useState("");
-  const [activeInput, setActiveInput] = useState(null); // 'origin' or 'destination'
+  // Listen for other server messages (not job assignments - handled separately)
+  useEffect(() => {
+    // Listen for driver-specific messages  
+    onMessage("driver-message", (message) => {
+      console.log("📨 Driver message received:", message);
+      Alert.alert("Driver Message", message.text || "New message received");
+    });
 
-  // Route and ETA state
-  const [eta, setEta] = useState(null);
-  const [isLoadingETA, setIsLoadingETA] = useState(false);
+    onMessage("system-alert", (alert) => {
+      console.log("⚠️ System alert:", alert);
+      Alert.alert("System Alert", alert.message || "System notification");
+    });
+  }, [onMessage]);
 
-  // Suggestions state
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-
-  // Map interaction state
-  const [isMapAnimating, setIsMapAnimating] = useState(false);
-  const [isProcessingSuggestion, setIsProcessingSuggestion] = useState(false);
-  const [preventBlur, setPreventBlur] = useState(false);
+  // Job assignment state (for when backend sends jobs)
+  const [currentJob, setCurrentJob] = useState(null);
+  const [jobRoute, setJobRoute] = useState(null);
+  const [jobETA, setJobETA] = useState(null);
+  const [isLoadingJobETA, setIsLoadingJobETA] = useState(false);
 
   // Get Google Maps API key for MapViewDirections
   const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
 
   // Map reference for controlling map view
   const mapRef = useRef(null);
-  const searchTimeout = useRef(null);
 
-  // Default map region (centered on Nigeria)
-  const defaultRegion = {
-    latitude: 9.082,
-    longitude: 8.6753,
-    latitudeDelta: 8,
-    longitudeDelta: 8,
-  };
+  // Dynamic map region based on driver's location
+  const getCurrentMapRegion = useCallback(() => {
+    if (currentLocation) {
+      return {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.01, // Closer zoom for driver tracking
+        longitudeDelta: 0.01,
+      };
+    }
+    
+    // Fallback region (Nigeria) if no GPS location yet
+    return {
+      latitude: 9.082,
+      longitude: 8.6753,
+      latitudeDelta: 8,
+      longitudeDelta: 8,
+    };
+  }, [currentLocation]);
+
+  // Center map on driver's location when GPS updates
+  useEffect(() => {
+    if (currentLocation && mapRef.current) {
+      const region = getCurrentMapRegion();
+      mapRef.current.animateToRegion(region, 1000);
+    }
+  }, [currentLocation, getCurrentMapRegion]);
 
   // Function to fit map to show both markers or current location
-  const fitMapToMarkers = useCallback(() => {
-    if (!mapRef.current) return;
-
-    setIsMapAnimating(true);
-
-    if (originLocation && destinationLocation) {
-      // Fit to show both origin and destination
-      mapRef.current.fitToCoordinates([originLocation, destinationLocation], {
-        edgePadding: { top: 180, right: 50, bottom: 200, left: 50 },
-        animated: true,
-      });
-    } else if (originLocation) {
-      // Center on origin only - don't auto-center on current location
-      mapRef.current.animateToRegion(
-        {
-          ...originLocation,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        },
-        1000
-      );
-    } else if (destinationLocation) {
-      // Center on destination if only destination is set
-      mapRef.current.animateToRegion(
-        {
-          ...destinationLocation,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        },
-        1000
-      );
-    }
-
-    // Re-enable map interaction after animation
-    setTimeout(() => setIsMapAnimating(false), 1500);
-    // Removed: auto-centering on current location when neither origin nor destination is set
-  }, [originLocation, destinationLocation]);
-
-  // Handle text change and search suggestions
-  const handleTextChange = useCallback((text, type) => {
-    if (type === "origin") {
-      setOriginAddress(text);
-    } else {
-      setDestinationAddress(text);
-    }
-
-    // Clear previous timeout
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    // Debounce search
-    searchTimeout.current = setTimeout(async () => {
-      if (text.trim().length >= 2) {
-        setIsLoadingSuggestions(true);
-        const result = await searchPlaces(text);
-        if (result.success) {
-          setSuggestions(result.predictions);
-          setShowSuggestions(true);
-        }
-        setIsLoadingSuggestions(false);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    }, 300);
-  }, []);
-
-  // Handle suggestion selection
-  const handleSuggestionPress = useCallback(
-    async (prediction) => {
-      if (!activeInput) {
-        return;
-      }
-
-      setIsProcessingSuggestion(true); // Block map interactions
-      setIsLoadingSuggestions(true);
-      setShowSuggestions(false);
-
-      const placeDetails = await getPlaceDetails(prediction.place_id);
-      if (placeDetails.success) {
-        // Prioritize readable name over address, and clean up Plus Codes
-        let displayAddress = placeDetails.name || placeDetails.address;
-
-        // If the address contains Plus Codes, try to use a cleaner version
-        if (displayAddress.includes("+") && placeDetails.address) {
-          // Use the formatted address but try to clean it up
-          const addressParts = placeDetails.address.split(",");
-          if (addressParts.length > 1) {
-            // Take the first few parts that don't contain Plus Codes
-            displayAddress = addressParts
-              .filter((part) => !part.trim().includes("+"))
-              .slice(0, 2)
-              .join(", ")
-              .trim();
-          }
-        }
-
-        // Fallback to place name if address is still problematic
-        if (!displayAddress || displayAddress.includes("+")) {
-          displayAddress = placeDetails.name || "Selected Location";
-        }
-
-        const locationData = {
-          location: placeDetails.location,
-          address: displayAddress,
-          name: placeDetails.name,
-        };
-
-        if (activeInput === "origin") {
-          setOriginLocation(locationData.location);
-          setOriginAddress(locationData.address);
-        } else {
-          setDestinationLocation(locationData.location);
-          setDestinationAddress(locationData.address);
-        }
-
-        setActiveInput(null);
-
-        // Fit map after a short delay
-        setTimeout(() => fitMapToMarkers(), 500);
-      } else {
-        console.error("Failed to get place details:", placeDetails.error);
-      }
-      setIsLoadingSuggestions(false);
-
-      // Allow map interactions again after a delay
-      setTimeout(() => setIsProcessingSuggestion(false), 1000);
-    },
-    [activeInput, fitMapToMarkers]
-  );
-
-  // Handle input focus
-  const handleInputFocus = useCallback(
-    (type) => {
-      setActiveInput(type);
-      if (suggestions.length > 0) {
-        setShowSuggestions(true);
-      }
-    },
-    [suggestions]
-  );
-
-  // Handle input blur
-  const handleInputBlur = useCallback(() => {
-    // Don't clear active input if we're preventing blur (user interacting with suggestions)
-    if (preventBlur) {
-      return;
-    }
-
-    // Longer delay to allow suggestion taps to be processed properly
-    setTimeout(() => {
-      if (!preventBlur) {
-        // Double check
-        setActiveInput(null);
-        setShowSuggestions(false);
-      }
-    }, 300); // Increased from 150ms to 300ms
-  }, [preventBlur]);
-
-  // Handle using current location as origin
-  const handleUseCurrentLocation = useCallback(async () => {
-    if (!currentLocation) {
-      Alert.alert(
-        "Location Error",
-        "Current location not available. Please enable GPS."
-      );
-      return;
-    }
-
-    const coords = {
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude,
-    };
-
-    // Reverse geocode to get address
-    const geocodeResult = await reverseGeocode(
-      coords.latitude,
-      coords.longitude
-    );
-    const address = geocodeResult.success
-      ? geocodeResult.address
-      : "Current Location";
-
-    setOriginLocation(coords);
-    setOriginAddress(address);
-    setActiveInput(null);
-
-    // Fit map to show current location
-    setTimeout(() => fitMapToMarkers(), 500);
-  }, [currentLocation, fitMapToMarkers]);
-
-  // Handle location selection from search
-  const handleLocationSelect = useCallback(
-    (type, locationData) => {
-      if (type === "origin") {
-        setOriginLocation(locationData.location);
-        setOriginAddress(locationData.address);
-      } else {
-        setDestinationLocation(locationData.location);
-        setDestinationAddress(locationData.address);
-      }
-      setActiveInput(null);
-
-      // Fit map after a short delay
-      setTimeout(() => fitMapToMarkers(), 500);
-    },
-    [fitMapToMarkers]
-  );
-
-  // Handle map tap to set location
-  const handleMapPress = useCallback(
-    async (event) => {
-      // Don't allow map press during animations, suggestion processing, or when no input is active
-      if (!activeInput || isMapAnimating || isProcessingSuggestion) {
-        return;
-      }
-
-      const coordinate = event.nativeEvent.coordinate;
-
-      // Reverse geocode to get address
-      const geocodeResult = await reverseGeocode(
-        coordinate.latitude,
-        coordinate.longitude
-      );
-      const address = geocodeResult.success
-        ? geocodeResult.address
-        : "Selected Location";
-
-      if (activeInput === "origin") {
-        setOriginLocation(coordinate);
-        setOriginAddress(address);
-      } else {
-        setDestinationLocation(coordinate);
-        setDestinationAddress(address);
-      }
-
-      setActiveInput(null);
-    },
-    [activeInput, isMapAnimating, isProcessingSuggestion]
-  );
-
-  // Swap origin and destination
-  const handleSwapLocations = useCallback(() => {
-    const tempLocation = originLocation;
-    const tempAddress = originAddress;
-
-    setOriginLocation(destinationLocation);
-    setOriginAddress(destinationAddress);
-    setDestinationLocation(tempLocation);
-    setDestinationAddress(tempAddress);
-  }, [originLocation, originAddress, destinationLocation, destinationAddress]);
-
-  // Calculate ETA
-  const updateETA = useCallback(async () => {
-    if (!originLocation || !destinationLocation) {
-      setEta(null);
-      return;
-    }
-
+  // Job assignment handler - automatically triggered when job comes from backend
+  const handleJobAssignment = useCallback(async (jobData) => {
+    console.log('🚛 Processing job assignment:', jobData);
+    
     try {
-      setIsLoadingETA(true);
-
-      // Calculate ETA using Distance Matrix API
-      const etaResult = await calculateETA(originLocation, destinationLocation);
-      setEta(etaResult);
+      setCurrentJob(jobData);
+      setIsLoadingJobETA(true);
+      
+      // Calculate route from current location to pickup, then to destination
+      if (currentLocation && jobData.pickup && jobData.destination) {
+        
+        // Calculate ETA from driver location to pickup
+        const pickupETA = await calculateETA(
+          {
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+          },
+          jobData.pickup
+        );
+        
+        // Calculate ETA from pickup to destination  
+        const destinationETA = await calculateETA(
+          jobData.pickup,
+          jobData.destination
+        );
+        
+        setJobETA({
+          toPickup: pickupETA,
+          toDestination: destinationETA,
+        });
+        
+        // Fit map to show current location, pickup, and destination
+        if (mapRef.current) {
+          const coordinates = [
+            {
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+            },
+            jobData.pickup,
+            jobData.destination,
+          ];
+          
+          mapRef.current.fitToCoordinates(coordinates, {
+            edgePadding: { top: 180, right: 50, bottom: 200, left: 50 },
+            animated: true,
+          });
+        }
+      }
+      
     } catch (error) {
-      console.error("Error updating ETA:", error);
+      console.error('❌ Error processing job assignment:', error);
+      Alert.alert('Error', 'Failed to process job assignment');
     } finally {
-      setIsLoadingETA(false);
+      setIsLoadingJobETA(false);
     }
-  }, [originLocation, destinationLocation]);
+  }, [currentLocation]);
 
-  // Auto-calculate ETA when both locations are set
+  // Update job assignment handler in useEffect
   useEffect(() => {
-    if (originLocation && destinationLocation) {
-      updateETA();
-    }
-  }, [originLocation, destinationLocation, updateETA]);
+    onJobAssignment(handleJobAssignment);
+  }, [onJobAssignment, handleJobAssignment]);
 
   // Send location updates via WebSocket
   useEffect(() => {
@@ -385,20 +191,21 @@ export default function App() {
 
   // Handle permission denial and location retry
   const handleLocationRetry = useCallback(async () => {
-    setIsLoadingETA(true);
+    setIsLoadingJobETA(true);
 
     try {
       const newLocation = await getCurrentLocation();
 
       if (newLocation) {
         // Successfully retrieved location on retry
+        console.log('✅ Location retrieved on retry');
       } else {
         await handleLocationError("Initial location attempt failed");
       }
     } catch (error) {
       console.error("Error during location retry:", error);
     } finally {
-      setIsLoadingETA(false);
+      setIsLoadingJobETA(false);
     }
   }, [getCurrentLocation, handleLocationError]);
 
@@ -429,16 +236,16 @@ export default function App() {
     );
   }
 
-  // Main render
+  // Main render - Clean GPS tracking interface
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        {/* Map View */}
+        {/* Map View - Focused on driver's real location */}
         <MapView
           ref={mapRef}
           style={styles.map}
           customMapStyle={mapStyles.minimal}
-          initialRegion={defaultRegion}
+          initialRegion={getCurrentMapRegion()}
           showsUserLocation={!!currentLocation}
           showsMyLocationButton={false}
           showsTraffic={true}
@@ -450,111 +257,87 @@ export default function App() {
           zoomEnabled={true}
           toolbarEnabled={false}
           moveOnMarkerPress={false}
-          onPress={handleMapPress}
         >
-          {/* Origin marker */}
-          {originLocation && (
+          {/* Job Pickup Marker */}
+          {currentJob?.pickup && (
             <Marker
-              coordinate={originLocation}
-              title="Origin"
-              description={originAddress}
+              coordinate={currentJob.pickup}
+              title="Pickup Location"
+              description={currentJob.pickup.address || "Job pickup point"}
               pinColor="green"
               anchor={{ x: 0.5, y: 1 }}
             />
           )}
 
-          {/* Destination marker */}
-          {destinationLocation && (
+          {/* Job Destination Marker */}
+          {currentJob?.destination && (
             <Marker
-              coordinate={destinationLocation}
+              coordinate={currentJob.destination}
               title="Destination"
-              description={destinationAddress}
+              description={currentJob.destination.address || "Job destination"}
               pinColor="red"
               anchor={{ x: 0.5, y: 1 }}
             />
           )}
 
-          {/* MapViewDirections for road-following routes */}
-          {originLocation && destinationLocation && GOOGLE_MAPS_API_KEY && (
-            <MapViewDirections
-              origin={originLocation}
-              destination={destinationLocation}
-              apikey={GOOGLE_MAPS_API_KEY}
-              strokeWidth={6}
-              strokeColor={lagosColors.primary}
-              mode="DRIVING"
-              optimizeWaypoints={true}
-              precision="high"
-              timePrecision="now"
-              onReady={(result) => {
-                // Fit map to show the route with proper padding
-                if (mapRef.current && result.coordinates?.length > 0) {
-                  mapRef.current.fitToCoordinates(result.coordinates, {
-                    edgePadding: { top: 180, right: 50, bottom: 200, left: 50 },
-                    animated: true,
-                  });
-                }
-              }}
-              onError={(errorMessage) => {
-                // You could show a user-friendly error message here
-                Alert.alert(
-                  "Route Error",
-                  "Unable to calculate route. Please try different locations.",
-                  [{ text: "OK" }]
-                );
-              }}
-              onStart={(params) => {
-                // Starting route calculation...
-              }}
-            />
+          {/* Route from current location to pickup to destination */}
+          {currentJob && currentLocation && GOOGLE_MAPS_API_KEY && (
+            <>
+              {/* Route: Driver → Pickup */}
+              <MapViewDirections
+                origin={{
+                  latitude: currentLocation.coords.latitude,
+                  longitude: currentLocation.coords.longitude,
+                }}
+                destination={currentJob.pickup}
+                apikey={GOOGLE_MAPS_API_KEY}
+                strokeWidth={4}
+                strokeColor={lagosColors.success}
+                mode="DRIVING"
+                optimizeWaypoints={true}
+                precision="high"
+                timePrecision="now"
+              />
+              
+              {/* Route: Pickup → Destination */}
+              <MapViewDirections
+                origin={currentJob.pickup}
+                destination={currentJob.destination}
+                apikey={GOOGLE_MAPS_API_KEY}
+                strokeWidth={4}
+                strokeColor={lagosColors.primary}
+                mode="DRIVING"
+                optimizeWaypoints={true}
+                precision="high"
+                timePrecision="now"
+                onError={(errorMessage) => {
+                  console.warn("Route calculation error:", errorMessage);
+                }}
+              />
+            </>
           )}
         </MapView>
 
-        {/* Search Inputs */}
-        <View style={styles.searchContainer}>
-          <LocationSearchInput
-            placeholder="Choose starting location"
-            value={originAddress}
-            onLocationSelect={(data) => handleLocationSelect("origin", data)}
-            onTextChange={(text) => handleTextChange(text, "origin")}
-            showCurrentLocationButton={!!currentLocation}
-            onUseCurrentLocation={handleUseCurrentLocation}
-            isActive={activeInput === "origin"}
-            onFocus={() => handleInputFocus("origin")}
-            onBlur={handleInputBlur}
+        {/* Job Assignment ETA Panel - Only show when job is active */}
+        {currentJob && (
+          <ETAPanel
+            originAddress="Current Location"
+            destinationAddress={currentJob.destination?.address || "Job Destination"}
+            eta={jobETA?.toDestination}
+            isLoading={isLoadingJobETA}
+            isVisible={true}
           />
-          <View style={styles.searchSpacing} />
-          <View style={styles.destinationContainer}>
-            <LocationSearchInput
-              placeholder="Choose destination"
-              value={destinationAddress}
-              onLocationSelect={(data) =>
-                handleLocationSelect("destination", data)
-              }
-              onTextChange={(text) => handleTextChange(text, "destination")}
-              isActive={activeInput === "destination"}
-              onFocus={() => handleInputFocus("destination")}
-              onBlur={handleInputBlur}
-            />
-            <LocationSuggestions
-              suggestions={suggestions}
-              isVisible={showSuggestions}
-              onSuggestionPress={handleSuggestionPress}
-              onSuggestionTouchStart={() => setPreventBlur(true)}
-              onSuggestionTouchEnd={() => setPreventBlur(false)}
-            />
-          </View>
-        </View>
+        )}
 
-        {/* ETA Panel */}
-        <ETAPanel
-          originAddress={originAddress}
-          destinationAddress={destinationAddress}
-          eta={eta}
-          isLoading={isLoadingETA}
-          onSwapLocations={handleSwapLocations}
-          isVisible={!!(originAddress || destinationAddress)}
-        />
+        {/* Connection Status Indicator */}
+        <View style={styles.statusIndicator}>
+          <View 
+            style={[
+              styles.connectionDot, 
+              { backgroundColor: isConnected ? lagosColors.success : lagosColors.error }
+            ]} 
+          />
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -568,18 +351,22 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  searchContainer: {
+  statusIndicator: {
     position: "absolute",
     top: 60,
-    left: 16,
-    right: 16,
-    zIndex: 1000,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  searchSpacing: {
+  connectionDot: {
+    width: 12,
     height: 12,
-  },
-  destinationContainer: {
-    position: "relative",
-    zIndex: 1000,
+    borderRadius: 6,
   },
 });

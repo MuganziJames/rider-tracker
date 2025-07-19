@@ -1,152 +1,165 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Platform } from "react-native";
-import { CONFIG } from "../constants/config";
+import socketService from "../utils/socketService";
 
-export const useWebSocket = (url) => {
+export const useWebSocket = (url, driverId = "driver_001") => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
   const [lastMessage, setLastMessage] = useState(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
-  const ws = useRef(null);
-  const reconnectTimeout = useRef(null);
+  const socketRef = useRef(null);
+  const connectionStatusRef = useRef(null);
 
-  // Connect to WebSocket
-  const connect = useCallback(() => {
+  // Connect to socket.io server
+  const connect = useCallback(async () => {
     try {
       if (!url || url.trim() === "") {
         setError("WebSocket URL not configured");
         return;
       }
 
-      // Close existing connection
-      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        ws.current.close();
-      }
+      console.log("🚀 Connecting to socket.io server:", url);
+      setError(null); // Clear any previous errors
 
-      ws.current = new WebSocket(url);
+      // Connect using our socket service
+      await socketService.connect(url, driverId);
 
-      ws.current.onopen = () => {
-        setIsConnected(true);
-        setError(null);
-        setReconnectAttempts(0);
+      // Store socket reference
+      socketRef.current = socketService.socket;
 
-        // Send initial connection message
-        sendMessage({
-          type: "rider_connected",
-          timestamp: new Date().toISOString(),
-          message: "Rider mobile app connected",
-        });
-      };
+      // Set up event listeners
+      setupEventListeners();
 
-      ws.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          setLastMessage(message);
-        } catch (err) {
-          setLastMessage({ raw: event.data });
-        }
-      };
-
-      ws.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        setError("WebSocket connection error");
-      };
-
-      ws.current.onclose = (event) => {
-        setIsConnected(false);
-
-        // Attempt to reconnect if not intentionally closed
-        if (
-          event.code !== 1000 &&
-          reconnectAttempts < CONFIG.MAX_RECONNECT_ATTEMPTS
-        ) {
-          scheduleReconnect();
-        }
-      };
+      setIsConnected(true);
+      setError(null);
+      setReconnectAttempts(0);
     } catch (err) {
-      console.error("WebSocket connection failed:", err);
-      setError("Failed to connect to WebSocket");
+      console.warn("Initial socket.io connection attempt failed:", err.message);
+
+      // Don't treat this as a fatal error since socket.io will keep trying
+      // Just set a user-friendly message
+      setError(`Connecting to server... (${err.message})`);
+      setIsConnected(false);
+
+      // The socket service will continue trying to reconnect automatically
     }
-  }, [url, reconnectAttempts]);
+  }, [url, driverId]);
 
-  // Schedule reconnection
-  const scheduleReconnect = useCallback(() => {
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
-    }
+  // Set up event listeners
+  const setupEventListeners = useCallback(() => {
+    if (!socketRef.current) return;
 
-    const delay =
-      CONFIG.WEBSOCKET_RECONNECT_INTERVAL * Math.pow(2, reconnectAttempts);
+    // Connection events
+    socketRef.current.on("connect", () => {
+      setIsConnected(true);
+      setError(null);
+      setReconnectAttempts(0);
+    });
 
-    reconnectTimeout.current = setTimeout(() => {
-      setReconnectAttempts((prev) => prev + 1);
-      connect();
-    }, delay);
-  }, [connect, reconnectAttempts]);
+    socketRef.current.on("disconnect", (reason) => {
+      setIsConnected(false);
+      console.log("Disconnected:", reason);
+    });
 
-  // Send message through WebSocket
-  const sendMessage = useCallback((message) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      try {
-        const messageString =
-          typeof message === "string" ? message : JSON.stringify(message);
-        ws.current.send(messageString);
-        return true;
-      } catch (err) {
-        console.error("Failed to send WebSocket message:", err);
-        setError("Failed to send message");
-        return false;
-      }
-    } else {
-      return false;
-    }
+    socketRef.current.on("connect_error", (error) => {
+      setError(error.message);
+      setIsConnected(false);
+    });
+
+    socketRef.current.on("reconnect_attempt", (attemptNumber) => {
+      setReconnectAttempts(attemptNumber);
+    });
+
+    socketRef.current.on("reconnect", () => {
+      setIsConnected(true);
+      setError(null);
+      setReconnectAttempts(0);
+    });
+
+    // Listen for any server messages
+    socketRef.current.onAny((eventName, ...args) => {
+      setLastMessage({
+        event: eventName,
+        data: args,
+        timestamp: new Date().toISOString(),
+      });
+    });
   }, []);
 
-  // Send location update with enhanced data
+  // Send location update using our socket service
   const sendLocationUpdate = useCallback(
     (location) => {
-      if (!location) return false;
+      if (!location || !location.coords) {
+        console.warn("Invalid location data");
+        return false;
+      }
 
-      const locationMessage = {
-        type: "location_update",
-        timestamp: new Date().toISOString(),
-        rider_id: "rider_001", // This should come from auth/user context
-        location: {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-          speed: location.coords.speed,
-          heading: location.coords.heading,
-          altitude: location.coords.altitude,
-          altitudeAccuracy: location.coords.altitudeAccuracy,
-          timestamp: location.timestamp,
-        },
-        device_info: {
-          platform: Platform.OS,
-          version: Platform.Version,
-          battery: null, // Could be implemented with a battery tracking hook
-        },
-      };
+      const { latitude, longitude } = location.coords;
 
-      return sendMessage(locationMessage);
+      // Use socket service to send location
+      return socketService.sendLocationUpdate(latitude, longitude, driverId);
     },
-    [sendMessage]
+    [driverId]
   );
+
+  // Send custom message
+  const sendMessage = useCallback(
+    (eventName, data) => {
+      if (!socketRef.current || !isConnected) {
+        console.warn("Cannot send message: Socket not connected");
+        return false;
+      }
+
+      try {
+        socketRef.current.emit(eventName, data);
+        return true;
+      } catch (err) {
+        console.error("Failed to send message:", err);
+        setError(`Failed to send message: ${err.message}`);
+        return false;
+      }
+    },
+    [isConnected]
+  );
+
+  // Listen for job assignments (for future use)
+  const onJobAssignment = useCallback((callback) => {
+    socketService.onJobAssignment(callback);
+  }, []);
+
+  // Listen for custom events
+  const onMessage = useCallback((eventName, callback) => {
+    socketService.onMessage(eventName, callback);
+  }, []);
+
+  // Get connection status
+  const getStatus = useCallback(() => {
+    return socketService.getConnectionStatus();
+  }, []);
 
   // Initialize connection
   useEffect(() => {
     connect();
 
+    // Cleanup on unmount
     return () => {
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-      }
-      if (ws.current) {
-        ws.current.close(1000, "Component unmounting");
-      }
+      socketService.disconnect();
+      socketRef.current = null;
     };
   }, [connect]);
+
+  // Update reconnect attempts from socket service
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const status = socketService.getConnectionStatus();
+      if (status.reconnectAttempts !== reconnectAttempts) {
+        setReconnectAttempts(status.reconnectAttempts);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [reconnectAttempts]);
 
   return {
     isConnected,
@@ -155,6 +168,9 @@ export const useWebSocket = (url) => {
     reconnectAttempts,
     sendMessage,
     sendLocationUpdate,
+    onJobAssignment,
+    onMessage,
+    getStatus,
     reconnect: connect,
   };
 };

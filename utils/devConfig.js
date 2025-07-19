@@ -17,11 +17,12 @@ export const getWebSocketUrl = () => {
 
   if (!wsUrl || wsUrl.trim() === "" || wsUrl === "ws://your-server-ip:3000") {
     console.warn(
-      "⚠️ WebSocket URL not properly configured. WebSocket features will be disabled."
+      "⚠️ WebSocket URL not properly configured. Using default mini-trace server."
     );
-    return null;
+    return "https://mini-trace.onrender.com"; // Default to the socket.io server
   }
 
+  console.log("🔌 Using Socket.IO server:", wsUrl);
   return wsUrl;
 };
 

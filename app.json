@@ -28,7 +28,7 @@
     },
     "extra": {
       "googleMapsApiKey": "",
-      "wsUrl": "ws://your-server-ip:3000"
+      "wsUrl": "https://mini-trace.onrender.com"
     }
   }
 }

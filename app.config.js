@@ -31,7 +31,7 @@ export default {
     },
     extra: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
-      wsUrl: process.env.WS_URL || "", // Empty string instead of invalid placeholder
+      wsUrl: process.env.WS_URL || "https://mini-trace.onrender.com", // Updated to use socket.io server
     },
   },
 };
