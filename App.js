@@ -15,10 +15,7 @@ import ErrorDisplay from "./components/ErrorDisplay";
 import ETAPanel from "./components/ETAPanel";
 
 // Utils and constants
-import {
-  calculateETA,
-  reverseGeocode,
-} from "./utils/googleMaps";
+import { calculateETA, reverseGeocode } from "./utils/googleMaps";
 import { getWebSocketUrl, validateGoogleMapsConfig } from "./utils/devConfig";
 import { CONFIG } from "./constants/config";
 import { mapStyles, lagosColors } from "./constants/mapStyles";
@@ -37,7 +34,7 @@ export default function App() {
   // Initialize and validate configuration
   useEffect(() => {
     validateGoogleMapsConfig();
-    console.log("🚛 Driver ID generated:", driverId);
+    console.log(" Driver ID generated:", driverId);
   }, [driverId]);
 
   // Location management
@@ -64,14 +61,14 @@ export default function App() {
 
   // Listen for other server messages (not job assignments - handled separately)
   useEffect(() => {
-    // Listen for driver-specific messages  
+    // Listen for driver-specific messages
     onMessage("driver-message", (message) => {
-      console.log("📨 Driver message received:", message);
+      console.log(" Driver message received:", message);
       Alert.alert("Driver Message", message.text || "New message received");
     });
 
     onMessage("system-alert", (alert) => {
-      console.log("⚠️ System alert:", alert);
+      console.log(" System alert:", alert);
       Alert.alert("System Alert", alert.message || "System notification");
     });
   }, [onMessage]);
@@ -98,7 +95,7 @@ export default function App() {
         longitudeDelta: 0.01,
       };
     }
-    
+
     // Fallback region (Nigeria) if no GPS location yet
     return {
       latitude: 9.082,
@@ -118,61 +115,62 @@ export default function App() {
 
   // Function to fit map to show both markers or current location
   // Job assignment handler - automatically triggered when job comes from backend
-  const handleJobAssignment = useCallback(async (jobData) => {
-    console.log('🚛 Processing job assignment:', jobData);
-    
-    try {
-      setCurrentJob(jobData);
-      setIsLoadingJobETA(true);
-      
-      // Calculate route from current location to pickup, then to destination
-      if (currentLocation && jobData.pickup && jobData.destination) {
-        
-        // Calculate ETA from driver location to pickup
-        const pickupETA = await calculateETA(
-          {
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-          },
-          jobData.pickup
-        );
-        
-        // Calculate ETA from pickup to destination  
-        const destinationETA = await calculateETA(
-          jobData.pickup,
-          jobData.destination
-        );
-        
-        setJobETA({
-          toPickup: pickupETA,
-          toDestination: destinationETA,
-        });
-        
-        // Fit map to show current location, pickup, and destination
-        if (mapRef.current) {
-          const coordinates = [
+  const handleJobAssignment = useCallback(
+    async (jobData) => {
+      console.log(" Processing job assignment:", jobData);
+
+      try {
+        setCurrentJob(jobData);
+        setIsLoadingJobETA(true);
+
+        // Calculate route from current location to pickup, then to destination
+        if (currentLocation && jobData.pickup && jobData.destination) {
+          // Calculate ETA from driver location to pickup
+          const pickupETA = await calculateETA(
             {
               latitude: currentLocation.coords.latitude,
               longitude: currentLocation.coords.longitude,
             },
+            jobData.pickup
+          );
+
+          // Calculate ETA from pickup to destination
+          const destinationETA = await calculateETA(
             jobData.pickup,
-            jobData.destination,
-          ];
-          
-          mapRef.current.fitToCoordinates(coordinates, {
-            edgePadding: { top: 180, right: 50, bottom: 200, left: 50 },
-            animated: true,
+            jobData.destination
+          );
+
+          setJobETA({
+            toPickup: pickupETA,
+            toDestination: destinationETA,
           });
+
+          // Fit map to show current location, pickup, and destination
+          if (mapRef.current) {
+            const coordinates = [
+              {
+                latitude: currentLocation.coords.latitude,
+                longitude: currentLocation.coords.longitude,
+              },
+              jobData.pickup,
+              jobData.destination,
+            ];
+
+            mapRef.current.fitToCoordinates(coordinates, {
+              edgePadding: { top: 180, right: 50, bottom: 200, left: 50 },
+              animated: true,
+            });
+          }
         }
+      } catch (error) {
+        console.error(" Error processing job assignment:", error);
+        Alert.alert("Error", "Failed to process job assignment");
+      } finally {
+        setIsLoadingJobETA(false);
       }
-      
-    } catch (error) {
-      console.error('❌ Error processing job assignment:', error);
-      Alert.alert('Error', 'Failed to process job assignment');
-    } finally {
-      setIsLoadingJobETA(false);
-    }
-  }, [currentLocation]);
+    },
+    [currentLocation]
+  );
 
   // Update job assignment handler in useEffect
   useEffect(() => {
@@ -198,7 +196,7 @@ export default function App() {
 
       if (newLocation) {
         // Successfully retrieved location on retry
-        console.log('✅ Location retrieved on retry');
+        console.log(" Location retrieved on retry");
       } else {
         await handleLocationError("Initial location attempt failed");
       }
@@ -298,7 +296,7 @@ export default function App() {
                 precision="high"
                 timePrecision="now"
               />
-              
+
               {/* Route: Pickup → Destination */}
               <MapViewDirections
                 origin={currentJob.pickup}
@@ -322,7 +320,9 @@ export default function App() {
         {currentJob && (
           <ETAPanel
             originAddress="Current Location"
-            destinationAddress={currentJob.destination?.address || "Job Destination"}
+            destinationAddress={
+              currentJob.destination?.address || "Job Destination"
+            }
             eta={jobETA?.toDestination}
             isLoading={isLoadingJobETA}
             isVisible={true}
@@ -331,11 +331,15 @@ export default function App() {
 
         {/* Connection Status Indicator */}
         <View style={styles.statusIndicator}>
-          <View 
+          <View
             style={[
-              styles.connectionDot, 
-              { backgroundColor: isConnected ? lagosColors.success : lagosColors.error }
-            ]} 
+              styles.connectionDot,
+              {
+                backgroundColor: isConnected
+                  ? lagosColors.success
+                  : lagosColors.error,
+              },
+            ]}
           />
         </View>
       </SafeAreaView>
@@ -355,7 +359,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 60,
     right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 20,
     padding: 8,
     shadowColor: "#000",

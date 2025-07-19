@@ -18,7 +18,7 @@ class SocketService {
         // Store driver ID for reuse
         this.driverId = driverId;
 
-        console.log("🚀 Connecting to socket.io server:", serverUrl);
+        console.log(" Connecting to socket.io server:", serverUrl);
 
         // Create socket connection with better timeout settings
         this.socket = io(serverUrl, {
@@ -45,7 +45,7 @@ class SocketService {
 
         // Connection error - but don't reject immediately, let reconnection handle it
         this.socket.on("connect_error", (error) => {
-          console.warn("⚠️ Socket connection error:", error.message);
+          console.warn(" Socket connection error:", error.message);
           this.isConnected = false;
 
           // Only reject if this is the first attempt and it's been more than 45 seconds
@@ -60,19 +60,19 @@ class SocketService {
 
         // Disconnection
         this.socket.on("disconnect", (reason) => {
-          console.log("⚠️ Disconnected from server:", reason);
+          console.log(" Disconnected from server:", reason);
           this.isConnected = false;
         });
 
         // Reconnection attempts
         this.socket.on("reconnect_attempt", (attemptNumber) => {
-          console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+          console.log(` Reconnection attempt ${attemptNumber}...`);
           this.reconnectAttempts = attemptNumber;
         });
 
         // Successful reconnection
         this.socket.on("reconnect", (attemptNumber) => {
-          console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+          console.log(` Reconnected after ${attemptNumber} attempts`);
           this.isConnected = true;
           this.reconnectAttempts = 0;
 
@@ -82,11 +82,11 @@ class SocketService {
 
         // Failed to reconnect after all attempts
         this.socket.on("reconnect_failed", () => {
-          console.error("❌ Failed to reconnect after all attempts");
+          console.error(" Failed to reconnect after all attempts");
           this.isConnected = false;
         });
       } catch (error) {
-        console.error("❌ Failed to create socket connection:", error);
+        console.error(" Failed to create socket connection:", error);
         reject(error);
       }
     });
@@ -95,7 +95,7 @@ class SocketService {
   // Identify as driver using connect-user event
   identifyAsDriver(driverId) {
     if (!this.socket || !this.isConnected) {
-      console.warn("⚠️ Cannot identify driver: Socket not connected");
+      console.warn(" Cannot identify driver: Socket not connected");
       return false;
     }
 
@@ -108,10 +108,10 @@ class SocketService {
       };
 
       this.socket.emit("connect-user", userData);
-      console.log("👤 Driver identified:", userData);
+      console.log(" Driver identified:", userData);
       return true;
     } catch (error) {
-      console.error("❌ Failed to identify as driver:", error);
+      console.error(" Failed to identify as driver:", error);
       return false;
     }
   }
@@ -119,7 +119,7 @@ class SocketService {
   // Send location update
   sendLocationUpdate(latitude, longitude, driverId = null) {
     if (!this.socket || !this.isConnected) {
-      console.warn("⚠️ Cannot send location: Socket not connected");
+      console.warn(" Cannot send location: Socket not connected");
       return false;
     }
 
@@ -132,10 +132,10 @@ class SocketService {
       };
 
       this.socket.emit("location-update", locationData);
-      console.log("📍 Location update sent:", locationData);
+      console.log(" Location update sent:", locationData);
       return true;
     } catch (error) {
-      console.error("❌ Failed to send location update:", error);
+      console.error(" Failed to send location update:", error);
       return false;
     }
   }
@@ -143,12 +143,12 @@ class SocketService {
   // Listen for job assignments (for future use)
   onJobAssignment(callback) {
     if (!this.socket) {
-      console.warn("⚠️ Cannot listen for jobs: Socket not initialized");
+      console.warn(" Cannot listen for jobs: Socket not initialized");
       return;
     }
 
     this.socket.on("job-assignment", (jobData) => {
-      console.log("🚛 New job assignment received:", jobData);
+      console.log(" New job assignment received:", jobData);
       callback(jobData);
     });
   }
@@ -156,7 +156,7 @@ class SocketService {
   // Listen for any server messages
   onMessage(eventName, callback) {
     if (!this.socket) {
-      console.warn("⚠️ Cannot listen for messages: Socket not initialized");
+      console.warn(" Cannot listen for messages: Socket not initialized");
       return;
     }
 
