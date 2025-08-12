@@ -32,6 +32,7 @@ export default {
     extra: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
       wsUrl: process.env.WS_URL || "https://mini-trace.onrender.com", // Updated to use socket.io server
+      apiBaseUrl: process.env.API_BASE_URL || "",
     },
   },
 };

@@ -151,6 +151,16 @@ rider-tracker/
 }
 ```
 
+### 3b. Optional: Auth API Base URL
+
+Add to your `.env` so the new auth screens can call your Render backend later:
+
+```env
+API_BASE_URL=https://your-render-service.onrender.com
+```
+
+`app.config.js` exposes this as `expo.extra.apiBaseUrl` used by `utils/apiClient.js`.
+
 ### Incoming (Server → Rider)
 
 The app logs all incoming messages to console. Common message types:
