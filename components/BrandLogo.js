@@ -4,10 +4,27 @@ import { View, Image, StyleSheet } from "react-native";
 // SwiftDrop brand logo
 const logoSource = require("../assets/swiftdrop.png");
 
-const BrandLogo = () => {
+const BrandLogo = ({ size = "large" }) => {
+  const getImageStyle = () => {
+    switch (size) {
+      case "large":
+        return { width: 365, height: 365 };
+      case "medium":
+        return { width: 239, height: 239 };
+      case "small":
+        return { width: 150, height: 150 };
+      default:
+        return { width: 365, height: 365 };
+    }
+  };
+
   return (
     <View style={styles.wrapper}>
-      <Image source={logoSource} style={styles.image} resizeMode="contain" />
+      <Image
+        source={logoSource}
+        style={[styles.image, getImageStyle()]}
+        resizeMode="contain"
+      />
     </View>
   );
 };
@@ -18,8 +35,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   image: {
-    width: 180,
-    height: 150,
+    // Base style, size will be applied via getImageStyle()
   },
 });
 

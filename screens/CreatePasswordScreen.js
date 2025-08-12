@@ -53,7 +53,7 @@ const CreatePasswordScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <BrandLogo />
+        <BrandLogo size="small" />
 
         <Text style={styles.title}>Create New Password</Text>
         <Text style={styles.subtitle}>

@@ -38,7 +38,7 @@ const ForgotPasswordScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <BrandLogo />
+        <BrandLogo size="small" />
 
         <Text style={styles.title}>Forgot Password</Text>
         <Text style={styles.subtitle}>

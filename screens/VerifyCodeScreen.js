@@ -52,7 +52,7 @@ const VerifyCodeScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <BrandLogo />
+        <BrandLogo size="small" />
 
         <Text style={styles.title}>Enter Verification Code</Text>
         <Text style={styles.subtitle}>

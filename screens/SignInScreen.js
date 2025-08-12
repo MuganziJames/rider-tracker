@@ -7,6 +7,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  SafeAreaView,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { lagosColors } from "../constants/mapStyles";
@@ -30,83 +32,90 @@ const SignInScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#FFFFFF"
+        translucent={false}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <BrandLogo />
-
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>
-          Please enter your email id or password to Sign In
-        </Text>
-
-        <View style={styles.spacerLarge} />
-
-        <FormTextInput
-          label="Email ID"
-          placeholder="Email ID"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          leftIcon={
-            <MaterialIcons
-              name="mail-outline"
-              size={18}
-              color={lagosColors.accent}
-            />
-          }
-        />
-
-        <View style={styles.spacerMedium} />
-
-        <FormTextInput
-          label="Password"
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={secure}
-          autoCapitalize="none"
-          leftIcon={
-            <MaterialIcons
-              name="lock-outline"
-              size={18}
-              color={lagosColors.accent}
-            />
-          }
-          rightIcon={
-            <TouchableOpacity onPress={() => setSecure((s) => !s)}>
-              <MaterialIcons
-                name={secure ? "visibility-off" : "visibility"}
-                size={20}
-                color={lagosColors.textSecondary}
-              />
-            </TouchableOpacity>
-          }
-        />
-
-        <TouchableOpacity
-          style={styles.forgotRow}
-          onPress={() => navigation?.navigate?.("ForgotPassword")}
-          activeOpacity={0.7}
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.forgotText}>Forgot Password</Text>
-        </TouchableOpacity>
+          <BrandLogo size="small" />
 
-        <View style={styles.spacerLarge} />
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Please enter your email id or password to Sign In
+          </Text>
 
-        <PrimaryButton
-          title="Sign In"
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={styles.spacerLarge} />
+
+          <FormTextInput
+            label="Email ID"
+            placeholder="Email ID"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            leftIcon={
+              <MaterialIcons
+                name="mail-outline"
+                size={18}
+                color={lagosColors.accent}
+              />
+            }
+          />
+
+          <View style={styles.spacerMedium} />
+
+          <FormTextInput
+            label="Password"
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={secure}
+            autoCapitalize="none"
+            leftIcon={
+              <MaterialIcons
+                name="lock-outline"
+                size={18}
+                color={lagosColors.accent}
+              />
+            }
+            rightIcon={
+              <TouchableOpacity onPress={() => setSecure((s) => !s)}>
+                <MaterialIcons
+                  name={secure ? "visibility-off" : "visibility"}
+                  size={20}
+                  color={lagosColors.textSecondary}
+                />
+              </TouchableOpacity>
+            }
+          />
+
+          <TouchableOpacity
+            style={styles.forgotRow}
+            onPress={() => navigation?.navigate?.("ForgotPassword")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.forgotText}>Forgot Password</Text>
+          </TouchableOpacity>
+
+          <View style={styles.spacerLarge} />
+
+          <PrimaryButton
+            title="Sign In"
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
